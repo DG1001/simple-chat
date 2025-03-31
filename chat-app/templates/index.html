@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Einfacher Chat</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        #chat-container { max-width: 600px; margin: auto; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; }
+        #chat-window { height: 400px; overflow-y: scroll; padding: 15px; border-bottom: 1px solid #ddd; }
+        #chat-window div { margin-bottom: 10px; padding: 8px 12px; border-radius: 5px; }
+        .user-message { background-color: #e1f5fe; text-align: left; display: inline-block; max-width: 70%;}
+        .my-message { background-color: #c8e6c9; text-align: right; margin-left: auto; display: block; max-width: 70%; } /* Eigene Nachrichten rechtsbündig */
+        .notification { font-style: italic; color: #888; text-align: center; background-color: transparent; }
+        .message-user { font-weight: bold; display: block; margin-bottom: 3px; font-size: 0.9em; color: #555; }
+        .message-text { word-wrap: break-word; } /* Lange Wörter umbrechen */
+        #input-area { display: flex; padding: 10px; }
+        #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-right: 10px; }
+        #send-button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #send-button:hover { background-color: #45a049; }
+        #username-prompt { padding: 20px; text-align: center; }
+        #username-prompt input { padding: 10px; margin-right: 5px; }
+        #username-prompt button { padding: 10px 15px; }
+        .hidden { display: none; } /* Zum Ausblenden von Elementen */
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+
+<div id="chat-container">
+    
+    <div id="username-prompt">
+        <h2>Willkommen beim Chat!</h2>
+        <input type="text" id="username-input" placeholder="Gib deinen Namen ein...">
+        <button id="join-button">Beitreten</button>
+    </div>
+
+    <div id="chat-area" class="hidden">
+        <div id="chat-window">
+            </div>
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Nachricht eingeben...">
+            <button id="send-button">Senden</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Warten bis das DOM vollständig geladen ist
+    document.addEventListener('DOMContentLoaded', () => {
+        // Verbindung zum Socket.IO Server herstellen
+        // Passt sich automatisch an die URL an, von der die Seite geladen wurde
+        const socket = io(); 
+        
+        const usernameInput = document.getElementById('username-input');
+        const joinButton = document.getElementById('join-button');
+        const usernamePrompt = document.getElementById('username-prompt');
+        const chatArea = document.getElementById('chat-area');
+        const chatWindow = document.getElementById('chat-window');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+
+        let currentUsername = ''; // Speichert den Namen des aktuellen Benutzers
+
+        // --- Hilfsfunktion zum Hinzufügen von Nachrichten ins Chat-Fenster ---
+        function addMessage(msgData) {
+            const messageElement = document.createElement('div');
+            
+            if (msgData.type === 'user_message') {
+                const userSpan = document.createElement('span');
+                userSpan.className = 'message-user';
+                userSpan.textContent = msgData.user;
+                
+                const textSpan = document.createElement('span');
+                textSpan.className = 'message-text';
+                textSpan.textContent = msgData.text;
+
+                messageElement.appendChild(userSpan);
+                messageElement.appendChild(textSpan);
+                
+                // Unterscheide eigene Nachrichten von anderen
+                if(msgData.user === currentUsername) {
+                    messageElement.classList.add('my-message');
+                } else {
+                     messageElement.classList.add('user-message');
+                }
+
+            } else if (msgData.type === 'notification') {
+                messageElement.textContent = msgData.text;
+                messageElement.classList.add('notification');
+            } else {
+                 console.warn("Unbekannter Nachrichtentyp:", msgData);
+                 return; // Unbekannte Typen nicht anzeigen
+            }
+            
+            chatWindow.appendChild(messageElement);
+            // Automatisch nach unten scrollen
+            chatWindow.scrollTop = chatWindow.scrollHeight; 
+        }
+
+        // --- Event Listener ---
+
+        // Benutzer tritt bei
+        joinButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            if (username) {
+                currentUsername = username; // Namen speichern
+                socket.emit('user_joined', { username: username });
+                usernamePrompt.classList.add('hidden'); // Eingabefeld ausblenden
+                chatArea.classList.remove('hidden');    // Chat anzeigen
+                messageInput.focus(); // Fokus auf Nachrichteneingabe
+            } else {
+                alert('Bitte gib einen Namen ein.');
+            }
+        });
+        // Auch mit Enter beitreten
+        usernameInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                joinButton.click();
+            }
+        });
+
+        // Nachricht senden
+        sendButton.addEventListener('click', () => {
+            const messageText = messageInput.value.trim();
+            if (messageText) {
+                socket.emit('new_message', { text: messageText });
+                messageInput.value = ''; // Eingabefeld leeren
+            }
+        });
+        // Auch mit Enter senden
+        messageInput.addEventListener('keypress', (event) => {
+            // Verhindert Standardverhalten (Zeilenumbruch) bei gleichzeitigem Drücken von Shift+Enter
+            if (event.key === 'Enter' && !event.shiftKey) { 
+                event.preventDefault(); // Verhindert Zeilenumbruch im Input
+                sendButton.click();
+            }
+        });
+
+        // --- Socket.IO Event Handler ---
+
+        // Empfange die Chat-Historie beim Beitreten
+        socket.on('chat_history', (history) => {
+            chatWindow.innerHTML = ''; // Altes leeren (falls was da war)
+            history.forEach(msg => {
+                addMessage(msg);
+            });
+             // Scrollt zum Ende nach dem Laden der Historie
+             chatWindow.scrollTop = chatWindow.scrollHeight;
+        });
+
+        // Empfange eine neue Nachricht oder Benachrichtigung
+        socket.on('message', (msgData) => {
+            addMessage(msgData);
+        });
+
+        // Verbindung erfolgreich hergestellt
+        socket.on('connect', () => {
+            console.log('Verbunden mit Server, SID:', socket.id);
+            // Hier noch keine Aktion, Warte auf User-Input für Namen
+        });
+
+        // Verbindungsfehler behandeln
+        socket.on('connect_error', (error) => {
+            console.error('Verbindungsfehler:', error);
+            alert('Verbindung zum Chat-Server fehlgeschlagen. Bitte versuche die Seite neu zu laden.');
+        });
+
+        // Verbindung getrennt
+        socket.on('disconnect', (reason) => {
+            console.log('Verbindung getrennt:', reason);
+            // Man könnte hier den Chat ausgrauen oder eine Meldung anzeigen
+            // addMessage({ type: 'notification', text: 'Verbindung zum Server verloren...' });
+        });
+    });
+</script>
+
+</body>
+</html>
