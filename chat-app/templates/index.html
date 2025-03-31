@@ -228,13 +228,11 @@
         <button id="join-button">Beitreten</button>
     </div>
 
-    <div id="chat-area" class="hidden">
-        <div id="chat-window">
-            </div>
-        <div id="input-area">
-            <input type="text" id="message-input" placeholder="Nachricht eingeben..." autocomplete="off">
-            <button id="send-button">Senden</button>
+    <div id="chat-window" class="hidden">
         </div>
+    <div id="input-area" class="hidden">
+        <input type="text" id="message-input" placeholder="Nachricht eingeben..." autocomplete="off">
+        <button id="send-button">Senden</button>
     </div>
 
 </div>
@@ -246,7 +244,7 @@
         const usernameInput = document.getElementById('username-input');
         const joinButton = document.getElementById('join-button');
         const usernamePrompt = document.getElementById('username-prompt');
-        const chatArea = document.getElementById('chat-area');
+        const inputArea = document.getElementById('input-area');
         const chatWindow = document.getElementById('chat-window');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
@@ -302,9 +300,10 @@
             if (username) {
                 currentUsername = username; 
                 socket.emit('user_joined', { username: username });
-                usernamePrompt.classList.add('hidden'); 
-                chatArea.classList.remove('hidden');    
-                messageInput.focus(); 
+                usernamePrompt.classList.add('hidden');    
+                chatWindow.classList.remove('hidden');     
+                inputArea.classList.remove('hidden');      
+                messageInput.focus();                      
             } else {
                 alert('Bitte gib einen Namen ein.');
             }
